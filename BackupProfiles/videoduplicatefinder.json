@@ -1,0 +1,24 @@
+{
+  "appNames": ["Video Duplicate Finder", "videoduplicatefinder"],
+  "packageIds": ["videoduplicatefinder"],
+  "files": [
+    {
+      "name": "ScannedFiles.db",
+      "candidates": ["{ScoopPersist}\\ScannedFiles.db", "{InstallPath}\\ScannedFiles.db"]
+    },
+    {
+      "name": "Settings.json",
+      "candidates": ["{ScoopPersist}\\Settings.json", "{InstallPath}\\Settings.json"]
+    },
+    {
+      "name": "backup.scanresults",
+      "candidates": ["{ScoopPersist}\\backup.scanresults", "{InstallPath}\\backup.scanresults"],
+      "optional": true
+    },
+    {
+      "name": "DenseEmbeddings.db",
+      "candidates": ["{ScoopPersist}\\DenseEmbeddings.db", "{InstallPath}\\DenseEmbeddings.db"],
+      "optional": true
+    }
+  ]
+}

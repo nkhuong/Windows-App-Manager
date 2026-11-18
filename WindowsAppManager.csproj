@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net11.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>WindowsAppManager</AssemblyName>
+    <RootNamespace>WindowsAppManager</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="BackupProfiles\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
