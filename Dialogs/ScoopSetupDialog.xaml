@@ -1,0 +1,21 @@
+<Window x:Class="WindowsAppManager.Dialogs.ScoopSetupDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Install Scoop" Width="560" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner">
+    <StackPanel Margin="22">
+        <TextBlock Text="Install Scoop" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,12"/>
+        <TextBlock Text="Choose an empty folder for Scoop and its apps. Scoop will be installed for your current Windows account." TextWrapping="Wrap" Margin="0,0,0,14"/>
+        <TextBlock Text="Scoop folder" Margin="0,0,0,5"/>
+        <DockPanel Margin="0,0,0,14">
+            <Button DockPanel.Dock="Right" Content="Browse..." Click="BrowseClick" Margin="8,0,0,0"/>
+            <TextBox x:Name="RootBox"/>
+        </DockPanel>
+        <TextBlock Foreground="{StaticResource Soft}" TextWrapping="Wrap"
+                   Text="Downloads the official installer from https://get.scoop.sh, adds Scoop to your user PATH and sets your user PowerShell execution policy to RemoteSigned. Only the default main bucket is installed. Run App Manager without administrator privileges."/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="Cancel" IsCancel="True"/>
+            <Button Content="Install Scoop" Click="InstallClick" Background="{StaticResource Accent}" Margin="0"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

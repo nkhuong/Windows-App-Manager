@@ -34,6 +34,7 @@ public sealed class PlannedApp
 
 public sealed class AppState
 {
+    public string? ScoopRoot { get; set; }
     public List<PlannedApp> Planned { get; set; } = [];
     public Dictionary<string, GithubInstallation> GithubInstallations { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     // An installation's actual original installer often cannot be inferred later.

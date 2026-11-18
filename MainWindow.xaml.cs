@@ -15,7 +15,7 @@ public partial class MainWindow : Window
 {
     private readonly AppStore store = new();
     private readonly InventoryScanner inventory;
-    private readonly BackupService backups;
+    private BackupService backups;
     private List<AppItem> allItems = [];
     private AppItem? selected;
     private bool busy;
@@ -117,6 +117,11 @@ public partial class MainWindow : Window
     private void UpdateButtons()
     {
         if (InstallButton == null) return;
+        if (InstallScoopButton != null)
+        {
+            InstallScoopButton.Visibility = ScoopSetup.IsInstalled(inventory.ScoopRoot) ? Visibility.Collapsed : Visibility.Visible;
+            InstallScoopButton.IsEnabled = !busy;
+        }
         bool has = selected != null;
         ReleasesButton.Visibility = selected?.ManagedBy == "GitHub" ? Visibility.Visible : Visibility.Collapsed;
         ReleasesButton.IsEnabled = !busy;
@@ -133,11 +138,50 @@ public partial class MainWindow : Window
         EditPlanButton.IsEnabled = !busy && has && selected!.IsPlanned && !selected.IsInstalled;
     }
 
+    private async void InstallScoopClick(object sender, RoutedEventArgs e)
+    {
+        if (busy) return;
+        if (ScoopSetup.IsElevated())
+        {
+            MessageBox.Show(this, "Close App Manager and reopen it without Run as administrator to install Scoop for your user.", "Install Scoop");
+            return;
+        }
+        var dialog = new ScoopSetupDialog(inventory.ScoopRoot) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        string root = dialog.InstallRoot;
+        SetBusy(true, "Installing Scoop...");
+        var log = new OutputDialog("Install Scoop", "Downloading the official Scoop installer...\n") { Owner = this };
+        log.BeginRunning();
+        log.Show();
+        var progress = new Progress<string>(log.AppendOutput);
+        try
+        {
+            var result = await ScoopSetup.InstallAsync(root, progress);
+            if (!result.Succeeded) throw new IOException("Scoop installer exited with code " + result.ExitCode + ". See log above.");
+            if (!ScoopSetup.IsInstalled(root)) throw new IOException("Installer finished, but scoop.ps1 was not found. See log above.");
+            var check = await CommandRunner.ScoopStreamingAsync(root, ["--version"], progress);
+            if (!check.Succeeded) throw new IOException("Scoop was found but its version check failed. See log above.");
+            store.State.ScoopRoot = root;
+            store.Save();
+            Environment.SetEnvironmentVariable("SCOOP", root);
+            inventory.SetScoopRoot(root);
+            backups = new BackupService(store, root);
+            log.AppendOutput("\nScoop installed. You can search and install Scoop apps now.\n");
+            log.Complete("Scoop installation completed");
+        }
+        catch (Exception ex)
+        {
+            log.AppendOutput("\nERROR: " + ex.Message + "\n");
+            log.Complete("Scoop installation failed");
+        }
+        finally { SetBusy(false, "Ready"); }
+        await RefreshAsync();
+    }
+
     private void SelectStatus(string status)
     {
         bool active = SourceFilter.SelectedIndex == 0
             && (StatusFilter.SelectedItem as ComboBoxItem)?.Content?.ToString() == status;
-        SearchBox.Clear();
         SourceFilter.SelectedIndex = 0;
         if (active) { StatusFilter.SelectedIndex = 0; ApplyFilter(); return; }
         foreach (ComboBoxItem item in StatusFilter.Items)
@@ -206,7 +250,6 @@ public partial class MainWindow : Window
     private void ShowScoopClick(object sender, RoutedEventArgs e)
     {
         bool active = SourceFilter.SelectedIndex == 2 && StatusFilter.SelectedIndex == 0;
-        SearchBox.Clear();
         SourceFilter.SelectedIndex = active ? 0 : 2;
         StatusFilter.SelectedIndex = 0;
         ApplyFilter();
@@ -232,6 +275,7 @@ public partial class MainWindow : Window
     {
         if (busy || selected is not { ManagedBy: "GitHub", IsInstalled: false } app) return;
         SetBusy(true, "Loading GitHub release assets...");
+        OutputDialog? log = null;
         try
         {
             var release = await GithubInstaller.GetLatestAsync(app.PackageId);
@@ -248,7 +292,11 @@ public partial class MainWindow : Window
             if (MessageBox.Show(this, $"Download and extract {pick.SelectedAsset.Name}?\n\nRepository: {app.PackageId}\nVersion: {release.Version}\nDestination: {target}",
                 "Install portable GitHub release", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
             StatusText.Text = "Downloading and extracting " + pick.SelectedAsset.Name + "...";
-            await GithubInstaller.InstallAsync(pick.SelectedAsset, target, inventory.ScoopRoot);
+            log = new OutputDialog("Install: " + app.Name, "Starting GitHub install...\n") { Owner = this };
+            log.BeginRunning();
+            log.Show();
+            var progress = new Progress<string>(log.AppendOutput);
+            await GithubInstaller.InstallAsync(pick.SelectedAsset, target, inventory.ScoopRoot, progress);
             string installedPath = target;
             string linkNote = "";
             try { await GithubInstaller.CreateCurrentAsync(current, target); installedPath = current; }
@@ -256,9 +304,14 @@ public partial class MainWindow : Window
             store.State.GithubInstallations[app.PackageId] = new GithubInstallation
                 { Path = installedPath, Version = release.Version, RootPath = root, VersionPath = target };
             store.Save();
+            log.Complete("GitHub installation completed");
             MessageBox.Show(this, "Installed portable release to:\n" + target + "\nLaunch path: " + installedPath + linkNote + "\n\nUse Open folder to launch the app. Required runtimes are installed separately.", "GitHub install completed");
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "GitHub install failed", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex)
+        {
+            if (log != null) { log.AppendOutput("\nERROR: " + ex.Message + "\n"); log.Complete("GitHub installation failed"); }
+            else MessageBox.Show(this, ex.Message, "GitHub install failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
         finally { SetBusy(false, "Ready"); }
         await RefreshAsync();
     }
@@ -270,16 +323,25 @@ public partial class MainWindow : Window
         if (MessageBox.Show(this, $"Uninstall portable {app.Name}?\n\nClose the app first.\nPath: {installation.Path}\n\nThe active version and its data will be moved to a .wam-removed folder beside the version folder. Other versions are kept. AppData is left in place.",
             "Confirm GitHub uninstall", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         SetBusy(true, "Removing portable " + app.Name + "...");
+        var log = new OutputDialog("Uninstall: " + app.Name, "Starting GitHub uninstall...\n") { Owner = this };
+        log.BeginRunning();
+        log.Show();
+        var progress = new Progress<string>(log.AppendOutput);
         try
         {
-            string removedPath = await GithubInstaller.UninstallAsync(app.PackageId, installation.Path);
+            string removedPath = await GithubInstaller.UninstallAsync(app.PackageId, installation.Path, progress);
             store.AddPlanned(new PlannedApp { Name = app.Name, ManagedBy = "GitHub", PackageId = app.PackageId });
             store.State.GithubInstallations.Remove(app.PackageId);
             store.Save();
+            log.Complete("GitHub uninstall completed");
             MessageBox.Show(this, "Removed from installed apps and returned to Planned.\nFiles were kept at:\n" + removedPath,
                 "GitHub uninstall completed");
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "GitHub uninstall failed", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex)
+        {
+            log.AppendOutput("\nERROR: " + ex.Message + "\n");
+            log.Complete("GitHub uninstall failed");
+        }
         finally { SetBusy(false, "Ready"); }
         await RefreshAsync();
     }
@@ -299,6 +361,11 @@ public partial class MainWindow : Window
             MessageBoxButton.YesNo, action == "uninstall" ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         bool installReportedSuccess = false;
         SetBusy(true, $"{action} {app.Name} via {source}...");
+        var log = new OutputDialog($"{verb}: {app.Name}", "Starting...\n");
+        log.Owner = this;
+        log.BeginRunning();
+        log.Show();
+        var progress = new Progress<string>(log.AppendOutput);
         try
         {
             CommandResult result;
@@ -307,13 +374,14 @@ public partial class MainWindow : Window
                 var arguments = new List<string> { action, "--id", app.PackageId, "--exact" };
                 if (action is "install" or "upgrade")
                     arguments.AddRange(["--accept-package-agreements", "--accept-source-agreements"]);
-                result = await CommandRunner.WinGetAsync(arguments.ToArray());
+                result = await CommandRunner.RunAsync("winget.exe", arguments, output: progress);
             }
             else
             {
-                result = await CommandRunner.ScoopAsync(inventory.ScoopRoot, action == "upgrade" ? "update" : action, app.PackageId);
+                result = await CommandRunner.ScoopStreamingAsync(inventory.ScoopRoot,
+                    [action == "upgrade" ? "update" : action, app.PackageId], progress);
             }
-            new OutputDialog($"{verb}: {app.Name} (exit {result.ExitCode})", result.Output) { Owner = this }.ShowDialog();
+            log.Complete($"{verb}: {app.Name} (exit {result.ExitCode})");
             if (result.Succeeded && action == "install")
             {
                 installReportedSuccess = true;
@@ -323,7 +391,11 @@ public partial class MainWindow : Window
                 store.AddPlanned(new PlannedApp { Name = app.Name, ManagedBy = source, PackageId = app.PackageId });
             StatusText.Text = result.Succeeded ? $"{action} finished. Refreshing..." : $"{action} returned error {result.ExitCode}.";
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Command error", MessageBoxButton.OK, MessageBoxImage.Error); }
+        catch (Exception ex)
+        {
+            log.AppendOutput("\nERROR: " + ex.Message + "\n");
+            log.Complete($"{verb}: {app.Name} — failed");
+        }
         finally { busy = false; BusyBar.Visibility = Visibility.Collapsed; UpdateButtons(); }
         await RefreshAsync();
         if (installReportedSuccess && !allItems.Any(a => a.IsInstalled && a.ManagedBy == source

@@ -61,6 +61,7 @@
                 <Button Content="Scoop" x:Name="ScoopFilterButton" Click="ShowScoopClick" ToolTip="Click again to show all apps" Margin="8,0,0,0"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="InstallScoopButton" Content="Install Scoop" Click="InstallScoopClick" Visibility="Collapsed"/>
                 <Button Content="Search new app" Click="SearchNewClick" />
                 <Button Content="+ Add planned" Background="{StaticResource Accent}" Margin="0" Click="AddClick" />
             </StackPanel>

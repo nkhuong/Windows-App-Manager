@@ -8,18 +8,20 @@ namespace WindowsAppManager.Services;
 
 public sealed class InventoryScanner(AppStore store)
 {
-    public string ScoopRoot { get; } = FindScoopRoot();
+    public string ScoopRoot { get; private set; } = FindScoopRoot(store.State.ScoopRoot);
 
-    public static string FindScoopRoot()
+    public void SetScoopRoot(string root) => ScoopRoot = root;
+
+    public static string FindScoopRoot(string? configured = null)
     {
         string? environment = Environment.GetEnvironmentVariable("SCOOP");
         var paths = new[]
         {
-            environment, @"D:\PortableApps\Scoop",
+            configured, environment, Environment.GetEnvironmentVariable("SCOOP", EnvironmentVariableTarget.User), @"D:\PortableApps\Scoop",
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "scoop")
         };
         return paths.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p)
-            && Directory.Exists(Path.Combine(p!, "apps", "scoop"))) ?? @"D:\PortableApps\Scoop";
+            && ScoopSetup.IsInstalled(p!)) ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "scoop");
     }
 
     public async Task<(List<AppItem> Apps, List<string> Warnings)> ScanAsync()

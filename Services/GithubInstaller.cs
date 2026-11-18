@@ -64,8 +64,9 @@ public static class GithubInstaller
         if (assets.Count == 0) throw new InvalidOperationException("Latest release has no ZIP/7z assets. Use Open GitHub releases to install manually.");
         return new(doc.RootElement.GetProperty("tag_name").GetString() ?? "", assets);
     }
-    public static async Task<string> UninstallAsync(string repositoryUrl, string installedPath)
+    public static async Task<string> UninstallAsync(string repositoryUrl, string installedPath, IProgress<string>? output = null)
     {
+        output?.Report("Checking installation ownership and running processes...\n");
         string repository = RepositoryPath(repositoryUrl);
         string logical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(installedPath));
         var directory = new DirectoryInfo(logical);
@@ -99,6 +100,7 @@ public static class GithubInstaller
         Directory.CreateDirectory(archiveRoot);
         string destination = Path.Combine(archiveRoot, Path.GetFileName(physical) + "-" + Guid.NewGuid().ToString("N"));
         // Same-volume move retains config/data; never recursively delete a junction target.
+        output?.Report("Moving active version to " + destination + "\n");
         Directory.Move(physical, destination);
         if (linked)
         {
@@ -112,7 +114,7 @@ public static class GithubInstaller
         return destination;
     }
 
-    public static async Task InstallAsync(GithubAsset asset, string target, string scoopRoot)
+    public static async Task InstallAsync(GithubAsset asset, string target, string scoopRoot, IProgress<string>? output = null)
     {
         if (Directory.Exists(target) || File.Exists(target)) throw new IOException("Destination already exists. Choose a new folder.");
         string temp = Path.Combine(Path.GetTempPath(), "wam-" + Guid.NewGuid().ToString("N"));
@@ -129,12 +131,29 @@ public static class GithubInstaller
                     Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "7-Zip", "7z.exe") }.FirstOrDefault(File.Exists);
                 if (sevenZip == null) throw new FileNotFoundException("This release uses 7z. Install 7-Zip through Scoop or the standard installer first.");
             }
+            output?.Report("Downloading " + asset.Name + "\n");
             using (var response = await Http.GetAsync(asset.Url, HttpCompletionOption.ResponseHeadersRead))
             {
                 response.EnsureSuccessStatusCode();
                 await using var stream = new FileStream(archive, FileMode.CreateNew);
-                await response.Content.CopyToAsync(stream);
+                await using var input = await response.Content.ReadAsStreamAsync();
+                byte[] buffer = new byte[81920];
+                long downloaded = 0;
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                int count;
+                while ((count = await input.ReadAsync(buffer)) > 0)
+                {
+                    await stream.WriteAsync(buffer.AsMemory(0, count));
+                    downloaded += count;
+                    if (timer.ElapsedMilliseconds >= 1000)
+                    {
+                        output?.Report($"Downloaded {downloaded / 1048576.0:N1} MB\n");
+                        timer.Restart();
+                    }
+                }
+                output?.Report($"Download complete: {downloaded / 1048576.0:N1} MB\n");
             }
+            output?.Report("Checking archive and extracting to " + target + "\n");
             if (asset.Digest?.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) == true)
             {
                 await using var stream = File.OpenRead(archive);
@@ -145,7 +164,7 @@ public static class GithubInstaller
             if (sevenZip == null) await Task.Run(() => ZipFile.ExtractToDirectory(archive, target));
             else
             {
-                var result = await CommandRunner.RunAsync(sevenZip, ["x", archive, "-o" + target, "-y"]);
+                var result = await CommandRunner.RunAsync(sevenZip, ["x", archive, "-o" + target, "-y"], output: output);
                 if (!result.Succeeded) throw new IOException("7-Zip extraction failed: " + result.Output);
             }
             if (!Directory.EnumerateFiles(target, "*.exe", SearchOption.AllDirectories).Any())
