@@ -1,3 +1,15 @@
+v0.1.9
+
+Fix Scoop setup "Security error": removed Set-ExecutionPolicy -Scope CurrentUser from the wrapper. The previous wrapper started with Process=Bypass and then tried to set CurrentUser=RemoteSigned. PowerShell can report ExecutionPolicyOverride in this situation; ErrorAction=Stop aborted setup before the Scoop installer ran.
+
+The installer process now requests RemoteSigned directly and does not change the user's saved execution policy. Group Policy restrictions remain in force. The setup log includes effective execution policy, language mode, the full error record, exception details and script position.
+
+Update: close App Manager, apply this patch, Build and copy the complete bin/Debug/net11.0-windows output to the other computer. Run normally, then retry Install Scoop. A folder already containing files must be preserved; choose an empty folder if necessary.
+
+Validation: XML and patch checks passed. Source confirms there is no Set-ExecutionPolicy call in Scoop setup. Windows execution has not been verified in this environment.
+
+--- Previous release ---
+
 v0.1.8
 
 Cập nhật từ Git: đóng App Manager, chạy git pull origin main, mở solution và Build rồi F5. Giữ nguyên state.json.

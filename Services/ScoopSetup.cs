@@ -34,17 +34,26 @@ public static class ScoopSetup
                 $ErrorActionPreference = 'Stop'
                 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding
                 try {
-                    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction Stop
+                    Write-Output ('PowerShell language mode: ' + $ExecutionContext.SessionState.LanguageMode)
+                    Write-Output ('Effective execution policy: ' + (Get-ExecutionPolicy))
+                    Get-ExecutionPolicy -List | Format-Table -AutoSize | Out-String | Write-Output
+                    if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
+                        throw 'Scoop requires FullLanguage mode. This PowerShell session is restricted by system policy.'
+                    }
+                    Write-Output 'Starting the official Scoop installer...'
                     & $InstallerPath -ScoopDir $ScoopDir
                     if ($LASTEXITCODE) { exit $LASTEXITCODE }
                 } catch {
-                    [Console]::Error.WriteLine($_.Exception.Message)
+                    [Console]::Error.WriteLine(($_ | Format-List * -Force | Out-String))
+                    [Console]::Error.WriteLine($_.Exception.ToString())
+                    [Console]::Error.WriteLine($_.InvocationInfo.PositionMessage)
+                    [Console]::Error.WriteLine('Scoop installation stopped. No attempt was made to change user or organization execution policies.')
                     exit 1
                 }
                 """);
             output.Report("Installing Scoop to " + root + "\n");
             return await CommandRunner.RunAsync("powershell.exe",
-                ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", wrapperPath,
+                ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "RemoteSigned", "-File", wrapperPath,
                  "-InstallerPath", installerPath, "-ScoopDir", root], output: output);
         }
         finally { try { Directory.Delete(temporary, recursive: true); } catch { /* Temporary files only. */ } }

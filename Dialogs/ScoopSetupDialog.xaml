@@ -12,7 +12,7 @@
             <TextBox x:Name="RootBox"/>
         </DockPanel>
         <TextBlock Foreground="{StaticResource Soft}" TextWrapping="Wrap"
-                   Text="Downloads the official installer from https://get.scoop.sh, adds Scoop to your user PATH and sets your user PowerShell execution policy to RemoteSigned. Only the default main bucket is installed. Run App Manager without administrator privileges."/>
+                   Text="Downloads the official installer from https://get.scoop.sh, adds Scoop to your user PATH and uses RemoteSigned only for the installer process. Your saved PowerShell execution policy is unchanged. Only the default main bucket is installed. Run App Manager without administrator privileges."/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
             <Button Content="Cancel" IsCancel="True"/>
             <Button Content="Install Scoop" Click="InstallClick" Background="{StaticResource Accent}" Margin="0"/>
