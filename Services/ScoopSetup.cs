@@ -25,6 +25,7 @@ public static class ScoopSetup
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+            output.Report("HTTP GET https://get.scoop.sh\n");
             string installer = await client.GetStringAsync("https://get.scoop.sh");
             string installerPath = Path.Combine(temporary, "install.ps1");
             await File.WriteAllTextAsync(installerPath, installer);
@@ -41,12 +42,28 @@ public static class ScoopSetup
                         throw 'Scoop requires FullLanguage mode. This PowerShell session is restricted by system policy.'
                     }
                     Write-Output 'Starting the official Scoop installer...'
+                    $displayInstaller = "'" + $InstallerPath.Replace("'", "''") + "'"
+                    $displayRoot = "'" + $ScoopDir.Replace("'", "''") + "'"
+                    Write-Output ('COMMAND (PowerShell syntax): & ' + $displayInstaller + ' -ScoopDir ' + $displayRoot)
                     & $InstallerPath -ScoopDir $ScoopDir
                     if ($LASTEXITCODE) { exit $LASTEXITCODE }
                 } catch {
                     [Console]::Error.WriteLine(($_ | Format-List * -Force | Out-String))
                     [Console]::Error.WriteLine($_.Exception.ToString())
                     [Console]::Error.WriteLine($_.InvocationInfo.PositionMessage)
+                    $failure = $_.Exception
+                    $networkFailure = $false
+                    while ($null -ne $failure) {
+                        if ($failure -is [System.Net.WebException] -or $failure -is [System.Net.Sockets.SocketException]) {
+                            $networkFailure = $true
+                        }
+                        $failure = $failure.InnerException
+                    }
+                    if ($networkFailure) {
+                        [Console]::Error.WriteLine('NETWORK ERROR: the official installer could not download a required file. Installation is not complete.')
+                        [Console]::Error.WriteLine('Check GitHub access, your connection and proxy/firewall configuration. No firewall or security settings were changed.')
+                        [Console]::Error.WriteLine('Diagnostic command (not executed): Test-NetConnection github.com -Port 443')
+                    }
                     [Console]::Error.WriteLine('Scoop installation stopped. No attempt was made to change user or organization execution policies.')
                     exit 1
                 }

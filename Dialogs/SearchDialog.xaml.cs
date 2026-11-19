@@ -27,7 +27,7 @@ public partial class SearchDialog : Window
             var result = source == "WinGet"
                 ? await CommandRunner.WinGetAsync("search", query, "--accept-source-agreements", "--disable-interactivity")
                 : await CommandRunner.ScoopAsync(scoopRoot, "search", query);
-            ResultsBox.Text = result.Output;
+            ResultsBox.Text = "COMMAND (PowerShell syntax):\n" + result.CommandLine + "\n\n" + result.Output;
             List<PackageResult> rows = result.Succeeded ? ParseResults(result.Output, source) : [];
             ResultsGrid.ItemsSource = rows;
             Hint.Text = $"{rows.Count} results. Select a row and click Add to plan. Raw output is below.";

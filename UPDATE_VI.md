@@ -1,3 +1,14 @@
+v0.1.10
+
+- Every streamed external command is shown before process startup, with full arguments in copyable PowerShell syntax. The displayed text is never used for execution; ProcessStartInfo.ArgumentList still passes arguments directly.
+- CommandResult now stores CommandLine separately from Output. Search and update-check logs show it without adding command text to CLI output parsing.
+- Scoop setup logs HTTP GET and the expanded installer invocation. Network download failures retain full error details plus a short explanation and a suggested Test-NetConnection command, explicitly marked as not executed. This does not fix or bypass network restrictions.
+- GitHub junction setup shows the readable PowerShell script alongside the actual encoded command.
+
+Validation: XML, call-site checks, and patch checks only. Windows execution not verified.
+
+--- Previous release ---
+
 v0.1.9
 
 Fix Scoop setup "Security error": removed Set-ExecutionPolicy -Scope CurrentUser from the wrapper. The previous wrapper started with Process=Bypass and then tried to set CurrentUser=RemoteSigned. PowerShell can report ExecutionPolicyOverride in this situation; ErrorAction=Stop aborted setup before the Scoop installer ran.

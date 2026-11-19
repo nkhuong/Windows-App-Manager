@@ -7,10 +7,19 @@ namespace WindowsAppManager.Services;
 public record CommandResult(int ExitCode, string Output)
 {
     public bool Succeeded => ExitCode == 0;
+    public string CommandLine { get; init; } = "";
 }
 
 public static class CommandRunner
 {
+    // Display only. Execution always uses ProcessStartInfo.ArgumentList, never a shell string.
+    // Single-quoted PowerShell literals preserve spaces, apostrophes, dollar signs and backticks.
+    public static string FormatCommandLine(string fileName, IEnumerable<string> args)
+    {
+        static string Quote(string value) => "'" + value.Replace("'", "''") + "'";
+        return "& " + string.Join(" ", new[] { fileName }.Concat(args).Select(Quote));
+    }
+
     public static async Task<CommandResult> RunAsync(string fileName, IEnumerable<string> args,
         CancellationToken token = default, IProgress<string>? output = null,
         IReadOnlyDictionary<string, string>? environment = null)
@@ -28,7 +37,10 @@ public static class CommandRunner
         };
         if (environment != null)
             foreach (var pair in environment) process.StartInfo.Environment[pair.Key] = pair.Value;
-        foreach (string arg in args) process.StartInfo.ArgumentList.Add(arg);
+        string[] arguments = args.ToArray();
+        foreach (string arg in arguments) process.StartInfo.ArgumentList.Add(arg);
+        string commandLine = FormatCommandLine(fileName, arguments);
+        output?.Report("\nCOMMAND (PowerShell syntax):\n" + commandLine + "\n\n");
         process.Start();
         var captured = new StringBuilder();
         object sync = new();
@@ -58,7 +70,7 @@ public static class CommandRunner
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             throw;
         }
-        return new CommandResult(process.ExitCode, captured.ToString().Trim());
+        return new CommandResult(process.ExitCode, captured.ToString().Trim()) { CommandLine = commandLine };
     }
 
     public static Task<CommandResult> WinGetAsync(params string[] args)

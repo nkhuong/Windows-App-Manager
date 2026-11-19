@@ -299,7 +299,7 @@ public partial class MainWindow : Window
             await GithubInstaller.InstallAsync(pick.SelectedAsset, target, inventory.ScoopRoot, progress);
             string installedPath = target;
             string linkNote = "";
-            try { await GithubInstaller.CreateCurrentAsync(current, target); installedPath = current; }
+            try { await GithubInstaller.CreateCurrentAsync(current, target, progress); installedPath = current; }
             catch (Exception ex) { linkNote = "\nThe release was installed but current could not be created: " + ex.Message; }
             store.State.GithubInstallations[app.PackageId] = new GithubInstallation
                 { Path = installedPath, Version = release.Version, RootPath = root, VersionPath = target };

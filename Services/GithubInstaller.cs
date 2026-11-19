@@ -35,15 +35,16 @@ public static class GithubInstaller
         return "release-" + label + "-" + suffix;
     }
 
-    public static async Task CreateCurrentAsync(string current, string target)
+    public static async Task CreateCurrentAsync(string current, string target, IProgress<string>? output = null)
     {
         if (!Directory.Exists(target)) throw new DirectoryNotFoundException(target);
         if (Directory.Exists(current) || File.Exists(current)) throw new IOException("Current path already exists.");
         string Literal(string value) => "'" + value.Replace("'", "''") + "'";
         string script = "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path "
             + Literal(current) + " -Target " + Literal(target) + " | Out-Null";
+        output?.Report("PowerShell script used to create current:\n" + script + "\n");
         string encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
-        var result = await CommandRunner.RunAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded]);
+        var result = await CommandRunner.RunAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded], output: output);
         if (!result.Succeeded) throw new IOException(result.Output);
     }
 
