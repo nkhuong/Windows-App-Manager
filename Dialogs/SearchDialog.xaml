@@ -53,6 +53,7 @@
                     <DataGridTextColumn Header="Package ID" Binding="{Binding PackageId}" Width="2*"/>
                     <DataGridTextColumn Header="Version" Binding="{Binding Version}" Width="*"/>
                     <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="*"/>
+                    <DataGridTextColumn Header="Scoop bucket" Binding="{Binding BucketStatus}" Width="1.5*"/>
                 </DataGrid.Columns>
             </DataGrid>
             <TextBox Grid.Row="1" x:Name="ResultsBox" IsReadOnly="True" FontFamily="Consolas" FontSize="12"

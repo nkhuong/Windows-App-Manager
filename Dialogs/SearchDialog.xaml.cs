@@ -4,7 +4,10 @@ using WindowsAppManager.Services;
 using WindowsAppManager.Models;
 namespace WindowsAppManager.Dialogs;
 
-public sealed record PackageResult(string Name, string PackageId, string Version, string Source);
+public sealed record PackageResult(string Name, string PackageId, string Version, string Source, string Bucket = "", bool RequiresBucket = false)
+{
+    public string BucketStatus => RequiresBucket ? $"{Bucket} (add first)" : Bucket;
+}
 
 public partial class SearchDialog : Window
 {
@@ -38,34 +41,23 @@ public partial class SearchDialog : Window
 
     private static List<PackageResult> ParseResults(string output, string source)
     {
+        string clean = Regex.Replace(output, @"\x1B\[[0-?]*[ -/]*[@-~]", "");
+        if (source == "Scoop")
+        {
+            return ScoopSearchResults.Parse(clean).Select(row =>
+                new PackageResult(row.Name, row.Name, row.Version, source, row.Bucket, row.RequiresBucket)).ToList();
+        }
+
         var rows = new List<PackageResult>();
-        string bucket = "";
         bool table = false;
-        foreach (string raw in Regex.Replace(output, @"\x1B\[[0-?]*[ -/]*[@-~]", "").Split('\n'))
+        foreach (string raw in clean.Split('\n'))
         {
             string line = raw.Trim();
-            var bucketMatch = Regex.Match(line, @"^'([^']+)' bucket:");
-            if (bucketMatch.Success) { bucket = bucketMatch.Groups[1].Value; table = false; continue; }
             if (Regex.IsMatch(line, @"^-{3,}(?:\s+-+)*$")) { table = true; continue; }
             if (!table || line.Length == 0) continue;
             var columns = Regex.Split(line, @"\s{2,}");
-            if (source == "WinGet")
-            {
-                if (columns.Length >= 3 && Regex.IsMatch(columns[1], @"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
-                    && !columns[1].Contains('…'))
-                    rows.Add(new(columns[0], columns[1], columns[2], source));
-            }
-            else
-            {
-                // Scoop uses PowerShell table output with bucket/source as the third column.
-                var parts = Regex.Split(line, @"\s+");
-                if (parts.Length >= 2 && Regex.IsMatch(parts[0], @"^[a-zA-Z0-9][a-zA-Z0-9._+-]*$"))
-                {
-                    string b = parts.Length >= 3 ? parts[2] : bucket;
-                    string id = parts[0];
-                    rows.Add(new(parts[0], id, parts[1], source));
-                }
-            }
+            if (columns.Length >= 3 && Regex.IsMatch(columns[1], @"^[A-Za-z0-9][A-Za-z0-9._+-]*$"))
+                rows.Add(new(columns[0], columns[1], columns[2], source));
         }
         return rows.DistinctBy(x => x.PackageId).ToList();
     }
@@ -75,6 +67,12 @@ public partial class SearchDialog : Window
         if (searching || ResultsGrid.SelectedItem is not PackageResult row)
         {
             MessageBox.Show(this, "Select a package row first. If no rows appear, check the raw output.");
+            return;
+        }
+        if (row.RequiresBucket)
+        {
+            MessageBox.Show(this, $"Add the Scoop bucket first by running `scoop bucket add {row.Bucket}` in PowerShell, then search again.",
+                "Scoop bucket required", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         PlannedAdded?.Invoke(new PlannedApp { Name = row.Name, PackageId = row.PackageId, ManagedBy = row.Source });

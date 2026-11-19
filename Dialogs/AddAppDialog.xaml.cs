@@ -6,15 +6,8 @@ namespace WindowsAppManager.Dialogs;
 public partial class AddAppDialog : Window
 {
     public PlannedApp? Result { get; private set; }
-    public AddAppDialog(string name = "", string packageId = "", string source = "WinGet")
-    {
-        InitializeComponent();
-        NameBox.Text = name;
-        IdBox.Text = packageId;
-        foreach (ComboBoxItem item in SourceBox.Items)
-            if (string.Equals(item.Content?.ToString(), source, StringComparison.OrdinalIgnoreCase))
-                SourceBox.SelectedItem = item;
-    }
+    public AddAppDialog() => InitializeComponent();
+
     private void SaveClick(object sender, RoutedEventArgs e)
     {
         string name = NameBox.Text.Trim();

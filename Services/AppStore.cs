@@ -56,18 +56,6 @@ public sealed class AppStore
         Save();
     }
 
-    public void ReplacePlanned(PlannedApp oldApp, PlannedApp replacement)
-    {
-        State.Planned.RemoveAll(p => p.ManagedBy.Equals(oldApp.ManagedBy, StringComparison.OrdinalIgnoreCase)
-            && p.PackageId.Equals(oldApp.PackageId, StringComparison.OrdinalIgnoreCase)
-            && p.InstallPath.Equals(oldApp.InstallPath, StringComparison.OrdinalIgnoreCase));
-        if (!State.Planned.Any(p => p.ManagedBy.Equals(replacement.ManagedBy, StringComparison.OrdinalIgnoreCase)
-            && p.PackageId.Equals(replacement.PackageId, StringComparison.OrdinalIgnoreCase)
-            && p.InstallPath.Equals(replacement.InstallPath, StringComparison.OrdinalIgnoreCase)))
-            State.Planned.Add(replacement);
-        Save();
-    }
-
     public void RecordInstalled(string provider, string packageId)
     {
         State.InstallationHistory[$"{provider}:{packageId}"] = provider;

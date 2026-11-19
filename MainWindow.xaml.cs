@@ -135,7 +135,6 @@ public partial class MainWindow : Window
         OpenFolderButton.IsEnabled = !busy && has &&
             (Directory.Exists(selected!.InstallPath) || File.Exists(selected.InstallPath));
         RemovePlanButton.IsEnabled = !busy && has && selected!.IsPlanned;
-        EditPlanButton.IsEnabled = !busy && has && selected!.IsPlanned && !selected.IsInstalled;
     }
 
     private async void InstallScoopClick(object sender, RoutedEventArgs e)
@@ -255,16 +254,6 @@ public partial class MainWindow : Window
         ApplyFilter();
     }
 
-    private async void EditPlanClick(object sender, RoutedEventArgs e)
-    {
-        if (busy || selected is not { IsPlanned: true, IsInstalled: false } app) return;
-        var dialog = new AddAppDialog(app.Name, app.PackageId, app.ManagedBy) { Owner = this, Title = "Edit planned app" };
-        if (dialog.ShowDialog() != true || dialog.Result == null) return;
-        store.ReplacePlanned(new PlannedApp { Name = app.Name, ManagedBy = app.ManagedBy,
-            PackageId = app.PackageId, InstallPath = app.ManagedBy == "Manual" ? app.InstallPath : "" }, dialog.Result);
-        await RefreshAsync();
-    }
-
     private async void InstallClick(object sender, RoutedEventArgs e)
     {
         if (selected?.ManagedBy == "GitHub") await InstallGithubAsync();
@@ -359,13 +348,14 @@ public partial class MainWindow : Window
         if (source == "WinGet") msg += "\n\nWinGet works by package ID; Windows may have more than one install. Verify the target before proceeding.";
         if (MessageBox.Show(this, msg, "Confirm " + verb,
             MessageBoxButton.YesNo, action == "uninstall" ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-        bool installReportedSuccess = false;
+        bool checkInstall = false;
+        string? outcome = null;
         SetBusy(true, $"{action} {app.Name} via {source}...");
         var log = new OutputDialog($"{verb}: {app.Name}", "Starting...\n");
         log.Owner = this;
         log.BeginRunning();
         log.Show();
-        var progress = new Progress<string>(log.AppendOutput);
+        IProgress<string> progress = new Progress<string>(log.AppendOutput);
         try
         {
             CommandResult result;
@@ -381,30 +371,48 @@ public partial class MainWindow : Window
                 result = await CommandRunner.ScoopStreamingAsync(inventory.ScoopRoot,
                     [action == "upgrade" ? "update" : action, app.PackageId], progress);
             }
-            log.Complete($"{verb}: {app.Name} (exit {result.ExitCode})");
-            if (result.Succeeded && action == "install")
+            string? scoopFailure = source == "Scoop" ? PackageActionFeedback.ScoopFailure(result) : null;
+            bool noApplicableUpgrade = source == "WinGet" && action == "upgrade"
+                && result.ExitCode == PackageActionFeedback.WinGetUpdateNotApplicable;
+            if (noApplicableUpgrade)
             {
-                installReportedSuccess = true;
-                store.RecordInstalled(source, app.PackageId);
+                outcome = $"No applicable WinGet upgrade for {app.Name}.";
+                progress.Report("\n" + outcome + " To see why WinGet rejected the upgrade, run the command above with --verbose-logs --open-logs.\n");
+                log.Complete($"UPGRADE: {app.Name} (no applicable upgrade, exit {result.ExitCode})");
             }
-            if (result.Succeeded && action == "uninstall")
-                store.AddPlanned(new PlannedApp { Name = app.Name, ManagedBy = source, PackageId = app.PackageId });
-            StatusText.Text = result.Succeeded ? $"{action} finished. Refreshing..." : $"{action} returned error {result.ExitCode}.";
+            else if (scoopFailure != null || !result.Succeeded)
+            {
+                outcome = scoopFailure ?? $"{verb} failed for {app.Name} (exit {result.ExitCode}).";
+                progress.Report("\n" + outcome + "\n");
+                log.Complete($"{verb}: {app.Name} failed (exit {result.ExitCode})");
+            }
+            else
+            {
+                if (action == "install")
+                {
+                    store.RecordInstalled(source, app.PackageId);
+                    checkInstall = true;
+                }
+                if (action == "uninstall")
+                    store.AddPlanned(new PlannedApp { Name = app.Name, ManagedBy = source, PackageId = app.PackageId });
+                log.Complete($"{verb}: {app.Name} (exit {result.ExitCode})");
+            }
         }
         catch (Exception ex)
         {
-            log.AppendOutput("\nERROR: " + ex.Message + "\n");
-            log.Complete($"{verb}: {app.Name} — failed");
+            outcome = $"{verb} failed for {app.Name}: {ex.Message}";
+            progress.Report("\n" + outcome + "\n");
+            log.Complete($"{verb}: {app.Name} failed");
         }
         finally { busy = false; BusyBar.Visibility = Visibility.Collapsed; UpdateButtons(); }
         await RefreshAsync();
-        if (installReportedSuccess && !allItems.Any(a => a.IsInstalled && a.ManagedBy == source
+        if (outcome != null) StatusText.Text = outcome;
+        if (checkInstall && !allItems.Any(a => a.IsInstalled && a.ManagedBy == source
             && a.PackageId.Equals(app.PackageId, StringComparison.OrdinalIgnoreCase)))
         {
-            StatusText.Text = "Install command succeeded, but the app was not detected after scanning: " + app.PackageId;
-            MessageBox.Show(this, "The installer returned success, but inventory could not confirm the installation.\n\nPackage: "
-                + app.PackageId + "\nScoop root: " + inventory.ScoopRoot
-                + "\n\nCheck the command output and installation folder before trying again.",
+            StatusText.Text = "Installation not confirmed: " + app.PackageId;
+            MessageBox.Show(this, "The command returned exit 0, but the inventory scan did not find the package.\n\nPackage: "
+                + app.PackageId + "\n\nCheck the command output before trying again.",
                 "Installation not confirmed", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }

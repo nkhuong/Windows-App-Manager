@@ -154,7 +154,6 @@
                         <Button x:Name="UninstallButton" Content="Uninstall" Margin="0,0,0,8" Click="UninstallClick" IsEnabled="False"/>
                         <Button x:Name="BackupButton" Content="Backup files" Margin="0,0,0,8" Click="BackupClick" IsEnabled="False"/>
                         <Button x:Name="OpenFolderButton" Content="Open folder" Margin="0,0,0,8" Click="OpenFolderClick" IsEnabled="False"/>
-                        <Button x:Name="EditPlanButton" Content="Edit planned app" Click="EditPlanClick" IsEnabled="False" Margin="0,0,0,8"/>
                         <Button x:Name="RemovePlanButton" Content="Delete from plan" Margin="0" Click="RemovePlanClick" IsEnabled="False"/>
                         <TextBlock Text="Install / uninstall / upgrade require confirmation. Backups never delete source files."
                                    Foreground="{StaticResource Soft}" FontSize="11" TextWrapping="Wrap" Margin="0,18,0,0"/>

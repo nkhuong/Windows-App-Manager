@@ -18,7 +18,7 @@ public static class UpdateChecker
             var result = await CommandRunner.WinGetAsync("upgrade", "--accept-source-agreements", "--disable-interactivity");
             details.AppendLine("WINGET (live query)\nCOMMAND (PowerShell syntax):\n" + result.CommandLine + "\n\n" + result.Output);
             // WinGet returns this code when there are no applicable upgrades.
-            if (!result.Succeeded && result.ExitCode != unchecked((int)0x8A15002B))
+            if (!result.Succeeded && result.ExitCode != PackageActionFeedback.WinGetUpdateNotApplicable)
                 warnings.Add("WinGet update check failed (" + result.ExitCode + ").");
             else if (result.Succeeded && !ApplyTable(apps, result.Output, "WinGet", "Id", "Version", "Available")
                 && !result.Output.Contains("No installed package", StringComparison.OrdinalIgnoreCase)
